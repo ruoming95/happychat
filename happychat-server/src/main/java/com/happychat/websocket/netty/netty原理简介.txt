@@ -1,0 +1,20 @@
+Netty 的 EventLoopGroup 与 Selector 的配合工作基于 Java NIO 的非阻塞 I/O 多路复用模型。以下是它们如何协同工作的详细过程：
+
+创建 EventLoopGroup：当你创建一个 NioEventLoopGroup 实例时，Netty 会初始化一个包含多个 EventLoop 的线程池，每个 EventLoop 都与一个线程绑定。
+
+EventLoop 初始化：每个 EventLoop 在初始化时会创建一个 Selector 对象。Selector 是 Java NIO 中用于监听多个 I/O 通道的组件，它可以同时监控多个通道的 I/O 状态（如读、写就绪）。
+
+注册 Channel：当一个 Channel（如 SocketChannel）创建并绑定到某个端口后，它会注册到对应的 EventLoop 的 Selector 上。EventLoop 负责处理该 Channel 上发生的所有事件。
+
+事件循环：EventLoop 运行在一个单独的线程中，执行一个无限循环，不断地执行以下步骤：
+
+轮询（Select）：EventLoop 调用 Selector 的 select() 方法，等待通道上的 I/O 事件发生。select() 方法是非阻塞的，它会立即返回，如果没有任何事件发生，它将返回空集合。
+处理事件：如果 select() 返回了至少一个通道，EventLoop 会处理这些通道上的事件。例如，如果通道可读，它可能会调用相应的 ChannelHandler 来读取数据。
+处理任务队列：除了 I/O 事件，EventLoop 还负责执行与其关联的任务队列中的任务。这些任务可以是用户提交的定时任务或普通任务。
+事件分发：当 Selector 检测到某个通道有事件发生时，它会将该事件添加到内部的就绪队列中。EventLoop 会从这个队列中取出事件，并根据事件类型调用相应的处理器。
+
+处理连接请求：对于服务端的 bossGroup（通常是一个单线程的 EventLoopGroup），其 EventLoop 负责接受新的连接请求。一旦接受新连接，它会创建一个新的 Channel 并将该 Channel 注册到 workerGroup 中的某个 EventLoop。
+
+数据读写：workerGroup 中的 EventLoop 负责处理已接受连接的读写事件。它们通过轮询 Selector 来监控这些通道的 I/O 状态，并在数据可读或可写时进行相应的处理。
+
+优雅关闭：当 EventLoopGroup 的 shutdownGracefully() 方法被调用时，它会等待所有正在执行的任务完成后关闭，释放所有资源。
